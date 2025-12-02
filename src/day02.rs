@@ -51,36 +51,19 @@ impl Day<Vec<(usize, usize)>, usize> for Day02 {
         for &(a, b) in input {
             for i in a..=b {
                 let s = i.to_string();
-                let upperbound = s.len();
-                let middle_point = upperbound / 2;
+                let upperbound = (i.ilog10() + 1) as usize;
 
-                let mut is_matching = false;
-
-                'cursor_size_loop: for cursor_size in 1..=middle_point {
+                for &cursor_size in divisors_of(upperbound) {
                     let pattern = &s[0..cursor_size];
 
-                    for pos in (0..upperbound-cursor_size).step_by(cursor_size) {
-                        let cursor_pos = pos + cursor_size;
+                    let is_repeating = (cursor_size..upperbound)
+                        .step_by(cursor_size)
+                        .all(|pos| pattern == &s[pos..pos + cursor_size]);
 
-                        // skip of cursor overflows
-                        if cursor_pos + cursor_size > upperbound {
-                            continue 'cursor_size_loop;
-                        }
-
-                        // continue and increase cursor size when pattern doesn't match
-                        let possible_match = &s[cursor_pos..cursor_pos + cursor_size];
-                        if pattern != possible_match {
-                            continue 'cursor_size_loop;
-                        }
+                    if is_repeating {
+                        total += i;
+                        break;
                     }
-
-                    // loop finished without breaking, so pattern matches
-                    is_matching = true;
-                    break;
-                }
-
-                if is_matching {
-                    total += i;
                 }
             }
         }
@@ -102,4 +85,45 @@ fn encode_digits(mut n: usize) -> u64 {
     }
 
     result
+}
+
+fn divisors(n: usize) -> Vec<usize> {
+    if n == 0 { return vec![]; }
+    if n == 1 { return vec![1]; }
+
+    let mut divs = Vec::new();
+    let sqrt_n = (n as f64).sqrt() as usize;
+
+    for i in 1..=sqrt_n {
+        if n % i == 0 {
+            divs.push(i);
+
+            // Voeg ook de "partner" deler toe
+            let partner = n / i;
+            if partner != i {  // Vermijd duplicaten bij perfecte kwadraten
+                divs.push(partner);
+            }
+        }
+    }
+
+    divs.sort_unstable();
+    divs
+}
+
+const fn divisors_of(n: usize) -> &'static [usize] {
+    match n {
+        1 => &[],
+        2 => &[1],
+        3 => &[1],
+        4 => &[1, 2],
+        5 => &[1],
+        6 => &[1, 2, 3],
+        7 => &[1],
+        8 => &[1, 2, 4],
+        9 => &[1, 3],
+        10 => &[1, 2, 5],
+        11 => &[1],
+        12 => &[1, 2, 3, 4, 6],
+        _ => &[],
+    }
 }
