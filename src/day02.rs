@@ -49,19 +49,44 @@ impl Day<Vec<(usize, usize)>, usize> for Day02 {
         let mut total = 0;
 
         for &(a, b) in input {
-            for i in a..=b {
-                let s = i.to_string();
-                let upperbound = (i.ilog10() + 1) as usize;
+            for n in a..=b {
+                // n = "2121"
+                let encoded = encode_digits(n);
+                // encoded = 0010 0001 0010 0001
 
-                for &cursor_size in divisors_of(upperbound) {
-                    let pattern = &s[0..cursor_size];
+                // Tel hoeveel cijfers n heeft
+                let digit_count = (n.ilog10() + 1) as usize;
 
-                    let is_repeating = (cursor_size..upperbound)
-                        .step_by(cursor_size)
-                        .all(|pos| pattern == &s[pos..pos + cursor_size]);
+                for &pattern_size in divisors_of(digit_count) {
+                    // pattern_size = 2
 
-                    if is_repeating {
-                        total += i;
+                    // Stap 1: Extract pattern (eerste 2 cijfers)
+                    let pattern_bits = pattern_size * 4;
+                    let pattern_mask = (1u64 << pattern_bits) - 1;
+                    // pattern_mask = 0000 0000 1111 1111
+
+                    let pattern = encoded & pattern_mask;
+                    // 0000 0000 1111 1111
+                    // 0010 0001 0010 0001
+                    // 0000 0000 0010 0001 &
+
+
+                    // Stap 2: Herhaal pattern over hele lengte
+                    let mut replicated = 0u64;
+                    let total_bits = digit_count * 4;
+
+                    for shift in (0..total_bits).step_by(pattern_bits) {
+                        replicated |= pattern << shift;
+                    }
+                    // replicated = 0010 0001 herhaalt
+
+                    // Stap 3: Vergelijk met origineel
+                    let full_mask = (1u64 << total_bits) - 1;
+                    // full_mask = 1111 1111 1111 1111
+                    let result = (encoded & full_mask) == (replicated & full_mask);
+
+                    if result {
+                        total += n;
                         break;
                     }
                 }
@@ -87,7 +112,7 @@ fn encode_digits(mut n: usize) -> u64 {
     result
 }
 
-fn divisors(n: usize) -> Vec<usize> {
+fn _divisors(n: usize) -> Vec<usize> {
     if n == 0 { return vec![]; }
     if n == 1 { return vec![1]; }
 
@@ -124,6 +149,10 @@ const fn divisors_of(n: usize) -> &'static [usize] {
         10 => &[1, 2, 5],
         11 => &[1],
         12 => &[1, 2, 3, 4, 6],
+        13 => &[1],
+        14 => &[1, 2, 7],
+        15 => &[1, 3, 5],
+        16 => &[1, 2, 4, 8],
         _ => &[],
     }
 }
