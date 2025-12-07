@@ -36,23 +36,26 @@ pub trait Day<T, U: std::fmt::Debug> {
     
     /// Solve part 2 of the day's challenge
     fn part2(&self, input: &T) -> U;
-    
+
     /// Execute the complete solution: parse, solve both parts, and print results
     fn solve(&self, file_path: &str) {
         let input = fs::read_to_string(file_path)
             .expect(&format!("Failed to read file: {}", file_path));
-        
+
         let parsed = self.parse_input(&input);
+
+        let timer = std::time::Instant::now();
         let result1 = self.part1(&parsed);
+        println!("Part 1: {:?} (took {:?})", result1, timer.elapsed());
+
+        let timer = std::time::Instant::now();
         let result2 = self.part2(&parsed);
-        
-        println!("Part 1: {:?}", result1);
-        println!("Part 2: {:?}", result2);
+        println!("Part 2: {:?} (took {:?})", result2, timer.elapsed());
     }
 }
 
 fn main() {
-    const DAY: u8 = 3;
+    const DAY: u8 = 4;
     
     
     // let DAY: u8 = args[1].parse().expect("Day must be a number between 1 and 12");

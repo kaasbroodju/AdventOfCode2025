@@ -46,7 +46,6 @@ impl Day<Vec<(i32, i32)>, i32> for Day01 {
     fn part2(&self, input: &Vec<(i32, i32)>) -> i32 {
         let mut position = STARTING_POSITION;
         let mut total = 0;
-        let mut rotational_total = 0;
 
         for (direction, count) in input {
             let previous_position_is_zero = position == 0;
