@@ -30,6 +30,9 @@ impl BitArray {
     }
 
     fn get(&self, index: usize) -> bool {
+        if index >= GRID_SIZE {
+            return false;
+        }
         self.bits[index / CHUNK_SIZE] & (1 << (index % CHUNK_SIZE)) != 0
     }
 }
@@ -76,16 +79,9 @@ impl Day<BitArray, usize> for Day04 {
                 total += 1;
                 grid.set(i, false);
 
-                if x & (1u8 << 7u8) != 0 { to_check.push(i - WIDTH - 1); }
-                if x & (1u8 << 6u8) != 0 { to_check.push(i - WIDTH); }
-                if x & (1u8 << 5u8) != 0 { to_check.push(i - WIDTH + 1); }
-
-                if x & (1u8 << 4u8) != 0 { to_check.push(i - 1); }
-                if x & (1u8 << 3u8) != 0 { to_check.push(i + 1); }
-
-                if x & (1u8 << 2u8) != 0 { to_check.push(i + WIDTH - 1); }
-                if x & (1u8 << 1u8) != 0 { to_check.push(i + WIDTH); }
-                if x & 1u8 != 0 { to_check.push(i + WIDTH + 1); }
+                for (offset, bit) in OFFSETS {
+                    if x & (1u8 << bit) != 0 { to_check.push(i.wrapping_add_signed(offset)); }
+                }
             }
         }
 
@@ -99,16 +95,9 @@ impl Day<BitArray, usize> for Day04 {
                 total += 1;
                 grid.set(i, false);
 
-                if x & (1u8 << 7u8) != 0 { to_check.push(i - WIDTH - 1); }
-                if x & (1u8 << 6u8) != 0 { to_check.push(i - WIDTH); }
-                if x & (1u8 << 5u8) != 0 { to_check.push(i - WIDTH + 1); }
-
-                if x & (1u8 << 4u8) != 0 { to_check.push(i - 1); }
-                if x & (1u8 << 3u8) != 0 { to_check.push(i + 1); }
-
-                if x & (1u8 << 2u8) != 0 { to_check.push(i + WIDTH - 1); }
-                if x & (1u8 << 1u8) != 0 { to_check.push(i + WIDTH); }
-                if x & 1u8 != 0 { to_check.push(i + WIDTH + 1); }
+                for (offset, bit) in OFFSETS {
+                    if x & (1u8 << bit) != 0 { to_check.push(i.wrapping_add_signed(offset)); }
+                }
             }
         }
 
@@ -118,30 +107,37 @@ impl Day<BitArray, usize> for Day04 {
 
 #[inline]
 fn check_neighbours(grid: &BitArray, i: usize) -> u8 {
-    let mut x = 0u8;
-    let empty_left_side = i % WIDTH == 0;
-    let empty_right_side = (i + 1) % WIDTH == 0;
+    let col = i % WIDTH;
+    let at_left = (col == 0) as u8;
+    let at_right = (col == WIDTH - 1) as u8;
 
-    let p_l_u = i as isize - WIDTH as isize - 1;
-    let p_m_u = i as isize - WIDTH as isize;
-    let p_r_u = i as isize - WIDTH as isize + 1;
+    let left_mask = 0b10010100u8;   // Bits that need left-clear
+    let right_mask = 0b00101001u8;  // Bits that need right-clear
 
-    x |= if p_l_u >= 0 && !empty_left_side { (grid.get(p_l_u as usize) as u8 * (1u8 << 7u8)) } else { 0 };
-    x |= if p_m_u >= 0 { (grid.get(p_m_u as usize) as u8 * (1u8 << 6u8)) } else { 0 };
-    x |= if p_r_u > 0 && !empty_right_side { (grid.get(p_r_u as usize) as u8 * (1u8 << 5u8)) } else { 0 };
+    let valid_mask = u8::MAX
+        & !(at_left * left_mask)
+        & !(at_right * right_mask);
 
-    let p_l_m = i as isize - 1;
-    let p_r_m = i + 1;
-    x |= if p_l_m >= 0 && !empty_left_side { (grid.get(p_l_m as usize) as u8 * (1u8 << 4u8)) } else { 0 };
-    x |= if p_r_m < GRID_SIZE && !empty_right_side { (grid.get(p_r_m) as u8 * (1u8 << 3u8)) } else { 0 };
+    let x =
+        ((grid.get(i.wrapping_add_signed(-(WIDTH as isize) - 1)) as u8) << 7) |
+        ((grid.get(i.wrapping_add_signed(-(WIDTH as isize))) as u8) << 6) |
+        ((grid.get(i.wrapping_add_signed(-(WIDTH as isize) + 1)) as u8) << 5) |
+        ((grid.get(i.wrapping_add_signed(-1)) as u8) << 4) |
+        ((grid.get(i.wrapping_add_signed(1)) as u8) << 3) |
+        ((grid.get(i.wrapping_add_signed(WIDTH as isize - 1)) as u8) << 2) |
+        ((grid.get(i.wrapping_add_signed(WIDTH as isize)) as u8) << 1) |
+        (grid.get(i.wrapping_add_signed(WIDTH as isize + 1)) as u8);
 
-    let p_l_d = i + WIDTH - 1;
-    let p_m_d = i + WIDTH;
-    let p_r_d = i + WIDTH + 1;
-
-    x |= if p_l_d < GRID_SIZE && !empty_left_side { (grid.get(p_l_d) as u8 * (1u8 << 2u8)) } else { 0 };
-    x |= if p_m_d < GRID_SIZE { (grid.get(p_m_d) as u8 * (1u8 << 1)) } else { 0 };
-    x |= if p_r_d < GRID_SIZE && !empty_right_side { (grid.get(p_r_d) as u8) } else { 0 };
-    x
+    x & valid_mask
 }
 
+const OFFSETS: [(isize, u8); 8] = [
+    (-(WIDTH as isize) - 1, 7),  // top-left
+    (-(WIDTH as isize),     6),  // top
+    (-(WIDTH as isize) + 1, 5),  // top-right
+    (-1,                    4),  // left
+    (1,                     3),  // right
+    (WIDTH as isize - 1,    2),  // bottom-left
+    (WIDTH as isize,        1),  // bottom
+    (WIDTH as isize + 1,    0),  // bottom-right
+];
