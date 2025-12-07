@@ -2,108 +2,146 @@
 
 pub struct Day04;
 
-impl Day<Vec<Vec<bool>>, i32> for Day04 {
-    fn parse_input(&self, input: &str) -> Vec<Vec<bool>>
-    {
-        input.lines().map(|line| line.chars().map(|c| c == '@').collect::<Vec<_>>()).collect::<Vec<_>>()
+const WIDTH: usize = 137;
 
+const GRID_SIZE: usize = WIDTH * WIDTH;
+const CHUNK_SIZE: usize = usize::BITS as usize;
+const BIT_ARRAY_SIZE: usize = (GRID_SIZE / CHUNK_SIZE) + 1;
+
+#[derive(Debug, Clone)]
+pub struct BitArray {
+    bits: [usize; BIT_ARRAY_SIZE]
+}
+
+impl BitArray {
+    fn new() -> Self {
+        Self { bits: [0usize; BIT_ARRAY_SIZE] }
     }
-    
-    fn part1(&self, input: &Vec<Vec<bool>>) -> i32 {
 
-        let mut total = 0;
+    fn set(&mut self, index: usize, value: bool) {
+        let chunk_idx = index / CHUNK_SIZE;
+        let bit_pos = index % CHUNK_SIZE;
 
-        let height = input.len();
-        let width = input[0].len();
+        if value {
+            self.bits[chunk_idx] |= 1 << bit_pos;  // Set bit to 1
+        } else {
+            self.bits[chunk_idx] &= !(1 << bit_pos);  // Clear bit to 0
+        }
+    }
 
-        let mut y = 0;
-        while y < height {
-            let mut x = 0;
+    fn get(&self, index: usize) -> bool {
+        self.bits[index / CHUNK_SIZE] & (1 << (index % CHUNK_SIZE)) != 0
+    }
+}
 
-            while x < width {
-                if !input[y][x] { x += 1; continue; }
+impl Day<BitArray, usize> for Day04 {
+    fn parse_input(&self, input: &str) -> BitArray {
+        let mut array = BitArray::new();
+        let mut i = 0usize;
 
-                let mut surrounding_paper_rolls = 0;
-                // check upper_layer
-                let has_upper_layer = y as isize - 1 >= 0;
-                if has_upper_layer && x as isize - 1 >= 0 { surrounding_paper_rolls += input[y - 1][x - 1] as usize } // upper left
-                if has_upper_layer { surrounding_paper_rolls += input[y - 1][x] as usize } // upper middle
-                if has_upper_layer && x + 1 < width { surrounding_paper_rolls += input[y - 1][x + 1] as usize } // upper right
-
-                // check middle_layer
-                if x as isize - 1 >= 0 { surrounding_paper_rolls += input[y][x - 1] as usize } // middle left
-                if x + 1 < width { surrounding_paper_rolls += input[y][x + 1] as usize } // middle right
-
-                // check lower_layer
-                if y + 1 < height && x as isize - 1 >= 0 { surrounding_paper_rolls += input[y + 1][x - 1] as usize } // down left
-                if y + 1 < height { surrounding_paper_rolls += input[y + 1][x] as usize } // down middle
-                if y + 1 < height && x + 1 < width { surrounding_paper_rolls += input[y + 1][x + 1] as usize } // down right
-
-                if surrounding_paper_rolls < 4 {
-                    total += 1;
-                }
-
-
-                x += 1;
-            }
-
-            y += 1;
+        for char in input.chars() {
+            if char == '\n' || char == '\r' { continue; }
+            array.set(i, char == '@');
+            i += 1;
         }
 
+        array
+    }
+    
+    fn part1(&self, input: &BitArray) -> usize {
+        let mut total = 0;
+
+        for i in 0..GRID_SIZE {
+            if !input.get(i) { continue; }
+
+            let x = check_neighbours(&input, i);
+
+            total += (x.count_ones() < 4) as usize
+        }
 
         total
     }
     
-    fn part2(&self, input: &Vec<Vec<bool>>) -> i32 {
-        let mut input = input.clone();
+    fn part2(&self, input: &BitArray) -> usize {
+        let mut grid = input.clone();
         let mut total = 0;
+        let mut to_check: Vec<usize> = vec![];
 
-        let height = input.len();
-        let width = input[0].len();
+        for i in 0..GRID_SIZE {
+            if !grid.get(i) { continue; }
 
-        loop {
-            let mut total_round = 0;
+            let x = check_neighbours(&grid, i);
 
-            let mut y = 0;
-            while y < height {
-                let mut x = 0;
+            if x.count_ones() < 4 {
+                total += 1;
+                grid.set(i, false);
 
-                while x < width {
-                    if !input[y][x] { x += 1; continue; }
+                if x & (1u8 << 7u8) != 0 { to_check.push(i - WIDTH - 1); }
+                if x & (1u8 << 6u8) != 0 { to_check.push(i - WIDTH); }
+                if x & (1u8 << 5u8) != 0 { to_check.push(i - WIDTH + 1); }
 
-                    let mut surrounding_paper_rolls = 0;
-                    // check upper_layer
-                    let has_upper_layer = y as isize - 1 >= 0;
-                    if has_upper_layer && x as isize - 1 >= 0 { surrounding_paper_rolls += input[y - 1][x - 1] as usize } // upper left
-                    if has_upper_layer { surrounding_paper_rolls += input[y - 1][x] as usize } // upper middle
-                    if has_upper_layer && x + 1 < width { surrounding_paper_rolls += input[y - 1][x + 1] as usize } // upper right
+                if x & (1u8 << 4u8) != 0 { to_check.push(i - 1); }
+                if x & (1u8 << 3u8) != 0 { to_check.push(i + 1); }
 
-                    // check middle_layer
-                    if x as isize - 1 >= 0 { surrounding_paper_rolls += input[y][x - 1] as usize } // middle left
-                    if x + 1 < width { surrounding_paper_rolls += input[y][x + 1] as usize } // middle right
-
-                    // check lower_layer
-                    if y + 1 < height && x as isize - 1 >= 0 { surrounding_paper_rolls += input[y + 1][x - 1] as usize } // down left
-                    if y + 1 < height { surrounding_paper_rolls += input[y + 1][x] as usize } // down middle
-                    if y + 1 < height && x + 1 < width { surrounding_paper_rolls += input[y + 1][x + 1] as usize } // down right
-
-                    if surrounding_paper_rolls < 4 {
-                        input[y][x] = false; // remove from the grid
-                        total_round += 1;
-                    }
-
-
-                    x += 1;
-                }
-
-                y += 1;
+                if x & (1u8 << 2u8) != 0 { to_check.push(i + WIDTH - 1); }
+                if x & (1u8 << 1u8) != 0 { to_check.push(i + WIDTH); }
+                if x & 1u8 != 0 { to_check.push(i + WIDTH + 1); }
             }
+        }
 
 
-            total += total_round;
-            if total_round == 0 { break; }
+        while let Some(i) = to_check.pop() {
+            if !grid.get(i) { continue; }
+
+            let x = check_neighbours(&grid, i);
+
+            if x.count_ones() < 4 {
+                total += 1;
+                grid.set(i, false);
+
+                if x & (1u8 << 7u8) != 0 { to_check.push(i - WIDTH - 1); }
+                if x & (1u8 << 6u8) != 0 { to_check.push(i - WIDTH); }
+                if x & (1u8 << 5u8) != 0 { to_check.push(i - WIDTH + 1); }
+
+                if x & (1u8 << 4u8) != 0 { to_check.push(i - 1); }
+                if x & (1u8 << 3u8) != 0 { to_check.push(i + 1); }
+
+                if x & (1u8 << 2u8) != 0 { to_check.push(i + WIDTH - 1); }
+                if x & (1u8 << 1u8) != 0 { to_check.push(i + WIDTH); }
+                if x & 1u8 != 0 { to_check.push(i + WIDTH + 1); }
+            }
         }
 
         total
     }
 }
+
+#[inline]
+fn check_neighbours(grid: &BitArray, i: usize) -> u8 {
+    let mut x = 0u8;
+    let empty_left_side = i % WIDTH == 0;
+    let empty_right_side = (i + 1) % WIDTH == 0;
+
+    let p_l_u = i as isize - WIDTH as isize - 1;
+    let p_m_u = i as isize - WIDTH as isize;
+    let p_r_u = i as isize - WIDTH as isize + 1;
+
+    x |= if p_l_u >= 0 && !empty_left_side { (grid.get(p_l_u as usize) as u8 * (1u8 << 7u8)) } else { 0 };
+    x |= if p_m_u >= 0 { (grid.get(p_m_u as usize) as u8 * (1u8 << 6u8)) } else { 0 };
+    x |= if p_r_u > 0 && !empty_right_side { (grid.get(p_r_u as usize) as u8 * (1u8 << 5u8)) } else { 0 };
+
+    let p_l_m = i as isize - 1;
+    let p_r_m = i + 1;
+    x |= if p_l_m >= 0 && !empty_left_side { (grid.get(p_l_m as usize) as u8 * (1u8 << 4u8)) } else { 0 };
+    x |= if p_r_m < GRID_SIZE && !empty_right_side { (grid.get(p_r_m) as u8 * (1u8 << 3u8)) } else { 0 };
+
+    let p_l_d = i + WIDTH - 1;
+    let p_m_d = i + WIDTH;
+    let p_r_d = i + WIDTH + 1;
+
+    x |= if p_l_d < GRID_SIZE && !empty_left_side { (grid.get(p_l_d) as u8 * (1u8 << 2u8)) } else { 0 };
+    x |= if p_m_d < GRID_SIZE { (grid.get(p_m_d) as u8 * (1u8 << 1)) } else { 0 };
+    x |= if p_r_d < GRID_SIZE && !empty_right_side { (grid.get(p_r_d) as u8) } else { 0 };
+    x
+}
+
