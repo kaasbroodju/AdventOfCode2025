@@ -10,4 +10,4 @@ rayon = "1.11.0"
 simd = []
 
 [profile.dev]
-opt-level = 3  # Belangrijk voor SIMD performance tijdens development
+#opt-level = 3  # Belangrijk voor SIMD performance tijdens development

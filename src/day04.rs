@@ -1,5 +1,5 @@
-﻿#![feature(portable_simd)]
-use std::simd::*;
+﻿// #![feature(portable_simd)]
+// use std::simd::*;
 
 use crate::Day;
 
@@ -118,76 +118,76 @@ impl BitArray {
     //     Simd::from_array(result)
     // }
 
-    #[inline]
-    unsafe fn get_simd_chunks(&self, bit_index: usize) -> Simd<usize, 4> {
-        let byte_ptr = self.bits.as_ptr() as *const u8;
-        let byte_offset = bit_index / 8;
-        let bit_offset = bit_index % 8;
-
-        // Read 33 bytes total (enough for 256 bits + 7 bits misalignment)
-        let mut bytes = [0u8; 33];
-
-        let max_byte = (GRID_SIZE + 7) / 8;
-        let bytes_to_read = (byte_offset + 33).min(max_byte).saturating_sub(byte_offset);
-
-        if bytes_to_read > 0 {
-            unsafe {
-                std::ptr::copy_nonoverlapping(
-                    byte_ptr.add(byte_offset),
-                    bytes.as_mut_ptr(),
-                    bytes_to_read
-                );
-            }
-        }
-
-        let mut result = [0usize; 4];
-
-        if bit_offset == 0 {
-            // Byte-aligned: direct conversion
-            for i in 0..4 {
-                let base = i * 8;
-                result[i] = usize::from_ne_bytes([
-                    bytes[base], bytes[base+1], bytes[base+2], bytes[base+3],
-                    bytes[base+4], bytes[base+5], bytes[base+6], bytes[base+7],
-                ]);
-            }
-        } else {
-            // Bit-misaligned: need shifting
-            for i in 0..4 {
-                let byte_base = i * 8;
-
-                // Read 8 bytes + 1 extra for the shift spillover
-                // Build two usize values and combine them
-                let mut low = 0u64;
-                let mut high = 0u64;
-
-                // Read 8 bytes for low part
-                for j in 0..8 {
-                    if byte_base + j < 33 {
-                        low |= (bytes[byte_base + j] as u64) << (j * 8);
-                    }
-                }
-
-                // Read 1 byte for high part (the spillover)
-                if byte_base + 8 < 33 {
-                    high = bytes[byte_base + 8] as u64;
-                }
-
-                // Shift and combine
-                // We want bits [bit_offset .. bit_offset+64) from the 72-bit value
-                result[i] = ((low >> bit_offset) | (high << (64 - bit_offset))) as usize;
-            }
-        }
-
-        // Clear out-of-bounds bits
-        for offset in 0..CHUNK_SIZE * 4 {
-            if bit_index.wrapping_add(offset) >= GRID_SIZE {
-                result[offset / CHUNK_SIZE] &= !(1 << (offset % CHUNK_SIZE));
-            }
-        }
-
-        Simd::from_array(result)
-    }
+    // #[inline]
+    // unsafe fn get_simd_chunks(&self, bit_index: usize) -> Simd<usize, 4> {
+    //     let byte_ptr = self.bits.as_ptr() as *const u8;
+    //     let byte_offset = bit_index / 8;
+    //     let bit_offset = bit_index % 8;
+    // 
+    //     // Read 33 bytes total (enough for 256 bits + 7 bits misalignment)
+    //     let mut bytes = [0u8; 33];
+    // 
+    //     let max_byte = (GRID_SIZE + 7) / 8;
+    //     let bytes_to_read = (byte_offset + 33).min(max_byte).saturating_sub(byte_offset);
+    // 
+    //     if bytes_to_read > 0 {
+    //         unsafe {
+    //             std::ptr::copy_nonoverlapping(
+    //                 byte_ptr.add(byte_offset),
+    //                 bytes.as_mut_ptr(),
+    //                 bytes_to_read
+    //             );
+    //         }
+    //     }
+    // 
+    //     let mut result = [0usize; 4];
+    // 
+    //     if bit_offset == 0 {
+    //         // Byte-aligned: direct conversion
+    //         for i in 0..4 {
+    //             let base = i * 8;
+    //             result[i] = usize::from_ne_bytes([
+    //                 bytes[base], bytes[base+1], bytes[base+2], bytes[base+3],
+    //                 bytes[base+4], bytes[base+5], bytes[base+6], bytes[base+7],
+    //             ]);
+    //         }
+    //     } else {
+    //         // Bit-misaligned: need shifting
+    //         for i in 0..4 {
+    //             let byte_base = i * 8;
+    // 
+    //             // Read 8 bytes + 1 extra for the shift spillover
+    //             // Build two usize values and combine them
+    //             let mut low = 0u64;
+    //             let mut high = 0u64;
+    // 
+    //             // Read 8 bytes for low part
+    //             for j in 0..8 {
+    //                 if byte_base + j < 33 {
+    //                     low |= (bytes[byte_base + j] as u64) << (j * 8);
+    //                 }
+    //             }
+    // 
+    //             // Read 1 byte for high part (the spillover)
+    //             if byte_base + 8 < 33 {
+    //                 high = bytes[byte_base + 8] as u64;
+    //             }
+    // 
+    //             // Shift and combine
+    //             // We want bits [bit_offset .. bit_offset+64) from the 72-bit value
+    //             result[i] = ((low >> bit_offset) | (high << (64 - bit_offset))) as usize;
+    //         }
+    //     }
+    // 
+    //     // Clear out-of-bounds bits
+    //     for offset in 0..CHUNK_SIZE * 4 {
+    //         if bit_index.wrapping_add(offset) >= GRID_SIZE {
+    //             result[offset / CHUNK_SIZE] &= !(1 << (offset % CHUNK_SIZE));
+    //         }
+    //     }
+    // 
+    //     Simd::from_array(result)
+    // }
 }
 
 impl Day<BitArray, usize> for Day04 {
