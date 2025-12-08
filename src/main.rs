@@ -1,3 +1,6 @@
+#![feature(portable_simd)]
+use std::simd::*;
+
 use std::fs;
 
 mod day01;
@@ -55,7 +58,7 @@ pub trait Day<T, U: std::fmt::Debug> {
 }
 
 fn main() {
-    const DAY: u8 = 4;
+    const DAY: u8 = 2;
     
     
     // let DAY: u8 = args[1].parse().expect("Day must be a number between 1 and 12");
