@@ -58,7 +58,7 @@ pub trait Day<T, U: std::fmt::Debug> {
 }
 
 fn main() {
-    const DAY: u8 = 6;
+    const DAY: u8 = 7;
     
     
     // let DAY: u8 = args[1].parse().expect("Day must be a number between 1 and 12");
