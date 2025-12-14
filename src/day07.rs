@@ -41,6 +41,12 @@ impl BitArray {
         self.values[idx] |= 1 << bit;
     }
 
+    pub fn get(&self, index: usize) -> bool {
+        let idx = index / 64;
+        let bit = index % 64;
+        self.values[idx] & (1 << bit) != 0
+    }
+
     pub fn and(&self, other: &BitArray) -> BitArray {
         BitArray { values: self.values.iter()
             .zip(other.values.iter())
@@ -124,30 +130,25 @@ impl Debug for BitArray {
     }
 }
 
+const WIDTH: usize = 141;
 
-impl Day<Vec<Vec<bool>>, usize> for Day07 {
-    fn parse_input(&self, input: &str) -> Vec<Vec<bool>> {
+impl Day<Vec<BitArray>, usize> for Day07 {
+    fn parse_input(&self, input: &str) -> Vec<BitArray> {
         input
             .lines()
-            .map(|l| l.chars().map(|c| c == '^').collect::<Vec<bool>>())
-            .collect::<Vec<Vec<bool>>>()
+            .map(|l| BitArray::new(l.chars().map(|c| c == '^').collect::<Vec<bool>>()))
+            .collect::<Vec<_>>()
     }
     
-    fn part1(&self, input: &Vec<Vec<bool>>) -> usize {
-        let width = input[0].len();
-
-        let test = input
-            .iter()
-            .map(|l| BitArray::new(l.clone()))
-            .collect::<Vec<BitArray>>();
+    fn part1(&self, input: &Vec<BitArray>) -> usize {
 
         let mut splits = 0;
 
-        let mut scan_line = BitArray::new_empty(width);
+        let mut scan_line = BitArray::new_empty(WIDTH);
 
-        scan_line.set(width / 2);
+        scan_line.set(WIDTH / 2);
 
-        for line in test {
+        for line in input {
             // First part: how many are hitting
             // sl:     010
             // li:     010 &
@@ -170,37 +171,17 @@ impl Day<Vec<Vec<bool>>, usize> for Day07 {
         splits // 1672
     }
     
-    fn part2(&self, input: &Vec<Vec<bool>>) -> usize {
-        let mut input = input.clone();
-        let height = input.len();
-        let width = input[0].len();
+    fn part2(&self, input: &Vec<BitArray>) -> usize {
+        let mut acc = [1usize; WIDTH];
 
-        let y = 0;
-        let x = width / 2;
-
-
-
-        let mut cache: HashMap<(usize, usize), usize> = HashMap::new();
-
-        calc_splits(&input, (y, x), &mut cache)
-    }
-}
-
-fn calc_splits(grid: &Vec<Vec<bool>>, (y, x): (usize, usize), cache: &mut HashMap<(usize, usize), usize>) -> usize {
-    if y >= grid.len() {
-        1
-    } else if grid[y][x] {
-        if let Some(value) = cache.get(&(y, x)) {
-            *value
-        } else {
-            let left = if x + 1 < grid[y].len() { calc_splits(grid, (y, x + 1), cache) } else { 0 };
-            let right = if x > 0 { calc_splits(grid, (y, x - 1), cache) } else { 0 };
-
-            cache.insert((y, x), left + right);
-
-            left + right
+        for line in input.iter().rev() {
+            for i in 0..WIDTH {
+                if line.get(i) {
+                    acc[i] = acc[i - 1] + acc[i + 1];
+                }
+            }
         }
-    } else {
-        calc_splits(grid, (y + 1, x), cache)
+
+        acc[WIDTH / 2]
     }
 }
