@@ -5,34 +5,30 @@ use crate::Day;
 
 pub struct Day07;
 
+const WIDTH: usize = 141;
+const BIT_ARRAY_SIZE: usize = (WIDTH / u64::BITS as usize) + 1;
+
 pub struct BitArray {
-    values: Vec<u64>,
+    values: [u64; BIT_ARRAY_SIZE],
 }
 
 impl BitArray {
     pub fn new(values: Vec<bool>) -> BitArray {
-        let width = values.len();
-        let width_with_padding = width;  // add left padding
-        let words_per_row = (width_with_padding / 64) + 1;
-        let mut data = vec![0u64; words_per_row];
-        let mut x = 0;
-        for i in values {
+        let mut data = [0u64; BIT_ARRAY_SIZE];
+
+        for (x, &i) in values.iter().enumerate() {
             if i {
-                let actual_x = x; // Offset by 1 for left padding
-                let idx = actual_x / 64;
-                let bit = actual_x % 64;
+                let idx = x / 64;
+                let bit = x % 64;
                 data[idx] |= 1u64 << bit;
             }
-            x += 1;
         }
 
         BitArray { values: data }
     }
 
-    pub fn new_empty(width: usize) -> BitArray {
-        let width_with_padding = width;  // add left padding
-        let words_per_row = (width_with_padding / 64) + 1;
-        BitArray { values: vec![0u64; words_per_row] }
+    pub fn new_empty() -> BitArray {
+        BitArray { values: [0u64; BIT_ARRAY_SIZE] }
     }
 
     pub fn set(&mut self, index: usize) {
@@ -48,32 +44,31 @@ impl BitArray {
     }
 
     pub fn and(&self, other: &BitArray) -> BitArray {
-        BitArray { values: self.values.iter()
-            .zip(other.values.iter())
-            .map(|(a, b)| a & b)
-            .collect::<Vec<_>>() }
+        let mut result = [0u64; BIT_ARRAY_SIZE];
+        for i in 0..BIT_ARRAY_SIZE {
+            result[i] = self.values[i] & other.values[i];
+        }
+        BitArray { values: result }
     }
 
     pub fn or(&self, other: &BitArray) -> BitArray {
-        BitArray {
-            values: self.values.iter()
-                .zip(other.values.iter())
-                .map(|(a, b)| a | b)
-                .collect::<Vec<_>>()
+        let mut result = [0u64; BIT_ARRAY_SIZE];
+        for i in 0..BIT_ARRAY_SIZE {
+            result[i] = self.values[i] | other.values[i];
         }
+        BitArray { values: result }
     }
 
     pub fn xor(&self, other: &BitArray) -> BitArray {
-        BitArray {
-            values: self.values.iter()
-                .zip(other.values.iter())
-                .map(|(a, b)| a ^ b)
-                .collect::<Vec<_>>()
+        let mut result = [0u64; BIT_ARRAY_SIZE];
+        for i in 0..BIT_ARRAY_SIZE {
+            result[i] = self.values[i] ^ other.values[i];
         }
+        BitArray { values: result }
     }
 
     pub fn shift_left(&self) -> BitArray {
-        let mut result = vec![0u64; self.values.len()];
+        let mut result = [0u64; BIT_ARRAY_SIZE];
 
         for i in 0..self.values.len() {
             // Shift current word left by 1
@@ -89,7 +84,7 @@ impl BitArray {
     }
 
     pub fn shift_right(&self) -> BitArray {
-        let mut result = vec![0u64; self.values.len()];
+        let mut result = [0u64; BIT_ARRAY_SIZE];
 
         for i in 0..self.values.len() {
             // Shift current word right by 1
@@ -106,6 +101,44 @@ impl BitArray {
 
     pub fn count_ones(&self) -> u32 {
         self.values.iter().map(|&a| a.count_ones()).sum()
+    }
+
+    // Maak een nieuwe BitArray met dezelfde size als een andere
+    pub fn with_capacity_like(other: &BitArray) -> BitArray {
+        BitArray {
+            values: [0u64; BIT_ARRAY_SIZE]
+        }
+    }
+
+    // Copy data from another BitArray
+    pub fn copy_from(&mut self, other: &BitArray) {
+        self.values.copy_from_slice(&other.values);
+    }
+
+    // In-place AND, result goes into self
+    pub fn and_into(&mut self, a: &BitArray, b: &BitArray) {
+        for i in 0..BIT_ARRAY_SIZE {
+            self.values[i] = a.values[i] & b.values[i];
+        }
+    }
+
+    // Combined operation: self = (self | shift_left(hits) | shift_right(hits)) ^ hits
+    pub fn update_scan_line_inplace(&mut self, hits: &BitArray) {
+        for i in 0..BIT_ARRAY_SIZE {
+            let shifted_left = if i > 0 {
+                (hits.values[i] << 1) | (hits.values[i - 1] >> 63)
+            } else {
+                hits.values[i] << 1
+            };
+
+            let shifted_right = if i + 1 < BIT_ARRAY_SIZE {
+                (hits.values[i] >> 1) | (hits.values[i + 1] << 63)
+            } else {
+                hits.values[i] >> 1
+            };
+
+            self.values[i] = (self.values[i] | shifted_left | shifted_right) ^ hits.values[i];
+        }
     }
 }
 
@@ -130,8 +163,6 @@ impl Debug for BitArray {
     }
 }
 
-const WIDTH: usize = 141;
-
 impl Day<Vec<BitArray>, usize> for Day07 {
     fn parse_input(&self, input: &str) -> Vec<BitArray> {
         input
@@ -141,44 +172,32 @@ impl Day<Vec<BitArray>, usize> for Day07 {
     }
     
     fn part1(&self, input: &Vec<BitArray>) -> usize {
-
         let mut splits = 0;
-
-        let mut scan_line = BitArray::new_empty(WIDTH);
+        let mut scan_line = BitArray::new_empty();
+        let mut hits = BitArray::new_empty();  // Pre-allocate buffer
 
         scan_line.set(WIDTH / 2);
 
         for line in input {
-            // First part: how many are hitting
-            // sl:     010
-            // li:     010 &
-            // result: 010
-            let hits = line.and(&scan_line);
+            // Reuse hits buffer
+            hits.and_into(line, &scan_line);
 
             splits += hits.count_ones() as usize;
 
-            // Shift left and right all hits
-            let shifted_left = hits.shift_left();
-            let shifted_right = hits.shift_right();
-
-            // OR both shifted
-            scan_line = scan_line
-                .or(&shifted_left)
-                .or(&shifted_right)
-                .xor(&hits); // XOR with hits to get new scan_line
+            // Update scan_line in-place
+            scan_line.update_scan_line_inplace(&hits);
         }
 
-        splits // 1672
+        splits
     }
     
     fn part2(&self, input: &Vec<BitArray>) -> usize {
         let mut acc = [1usize; WIDTH];
 
         for line in input.iter().rev() {
-            for i in 0..WIDTH {
-                if line.get(i) {
-                    acc[i] = acc[i - 1] + acc[i + 1];
-                }
+            for i in 1..WIDTH - 1 {
+                let op = line.get(i);
+                acc[i] = (op as usize * (acc[i - 1] + acc[i + 1])) + ((!op) as usize * acc[i]);
             }
         }
 
