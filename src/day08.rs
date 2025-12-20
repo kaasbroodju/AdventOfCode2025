@@ -1,5 +1,6 @@
 ﻿use std::cmp::{Ordering, Reverse};
 use std::collections::BinaryHeap;
+use rayon::prelude::ParallelSliceMut;
 use crate::Day;
 
 pub struct Day08;
@@ -18,10 +19,10 @@ pub struct JunctionBox {
 impl JunctionBox {
 
     #[inline]
-    fn get_euclidian_distance(&self, other: &JunctionBox) -> usize {
-        (self.x.abs_diff(other.x).pow(2)
-            + self.y.abs_diff(other.y).pow(2)
-            + self.z.abs_diff(other.z).pow(2)).isqrt()
+    fn calculate_distance(&self, other: &JunctionBox) -> usize {
+        self.x.abs_diff(other.x).pow(2) +
+        self.y.abs_diff(other.y).pow(2) +
+        self.z.abs_diff(other.z).pow(2)
     }
 }
 
@@ -46,15 +47,6 @@ impl Circuit {
         Self { values: bit_array }
     }
 
-    // fn is_inside_circuit(&self, a: &usize, b: &usize) -> bool {
-    //     self.values.contains(a) && self.values.contains(b)
-    // }
-
-    // fn could_be_connected(&self, a: &usize, b: &usize) -> bool {
-    //     assert!(!(self.values.contains(a) && self.values.contains(b)));
-    //     self.values.contains(a) || self.values.contains(b)
-    // }
-
     fn contains(&self, a: &usize) -> bool {
         self.values[a / 64] & (1 << (a % 64)) != 0
     }
@@ -69,8 +61,8 @@ impl Circuit {
         }
     }
 
-    fn len(&self) -> u32 {
-        self.values.iter().fold(0, |acc, a| acc + a.count_ones())
+    fn len(&self) -> usize {
+        self.values.iter().fold(0, |acc, a| acc + a.count_ones()) as usize
     }
 }
 
@@ -90,7 +82,7 @@ impl Ord for Path {
     }
 }
 
-impl Day<Vec<JunctionBox>, i32> for Day08 {
+impl Day<Vec<JunctionBox>, usize> for Day08 {
     fn parse_input(&self, input: &str) -> Vec<JunctionBox> {
         input
             .lines()
@@ -105,7 +97,8 @@ impl Day<Vec<JunctionBox>, i32> for Day08 {
             .collect::<Vec<_>>()
     }
     
-    fn part1(&self, input: &Vec<JunctionBox>) -> i32 {
+    fn part1(&self, input: &Vec<JunctionBox>) -> usize {
+        
         let mut circuits = vec![];
         let length = input.len();
 
@@ -116,7 +109,7 @@ impl Day<Vec<JunctionBox>, i32> for Day08 {
 
         for i in 0..length {
             for j in i+1..length {
-                let distance = input[i].get_euclidian_distance(&input[j]);
+                let distance = input[i].calculate_distance(&input[j]);
                 let path = Path { distance, from: i, to: j };
 
                 // Slimme insertie: alleen toevoegen als beter dan huidige max
@@ -138,7 +131,6 @@ impl Day<Vec<JunctionBox>, i32> for Day08 {
 
         // Extract en sorteer - dit blijft exact hetzelfde!
         let mut top_1000: Vec<_> = heap.into_sorted_vec();
-        // top_1000.sort_unstable();  // Nu alleen 1000 items sorteren!
 
         for path in top_1000 {
             let ai = path.from;
@@ -147,8 +139,9 @@ impl Day<Vec<JunctionBox>, i32> for Day08 {
             let bi_found_in_circuit_i = circuits.iter().position(|circuit: &Circuit| circuit.contains(&bi));
 
             match (ai_found_in_circuit_i, bi_found_in_circuit_i) {
-                (Some(a_index), Some(b_index)) if a_index == b_index => {}
-                (Some(a_index), Some(b_index)) if a_index != b_index => {
+                (Some(a_index), Some(b_index)) => {
+                    if a_index == b_index { continue; }
+                    
                     // two circuits can be joined
                     let remove_index = a_index.max(b_index);
                     let join_index = a_index.min(b_index);
@@ -164,81 +157,126 @@ impl Day<Vec<JunctionBox>, i32> for Day08 {
                 }
                 (None, None) => {
                     circuits.push(Circuit::new(ai, bi));
-                    // panic!()
-                },
-                (Some(_), Some(_)) => panic!()
+                }
             }
         }
 
         circuits.sort_by(|a, b| b.len().cmp(&a.len()));
 
-        (circuits[0].len() * circuits[1].len() * circuits[2].len()) as i32
+        circuits[0].len() * circuits[1].len() * circuits[2].len()
     }
     
-    fn part2(&self, input: &Vec<JunctionBox>) -> i32 {
-        // let mut circuits = vec![];
-        let mut distances = vec![];
+    fn part2(&self, input: &Vec<JunctionBox>) -> usize {
+        
         let length = input.len();
+        let mut distances = Vec::with_capacity((length * (length - 1)) / 2);
 
         for i in 0..length {
             for j in i+1..length {
-                if i == j { continue }
-                let a = &input[i];
-                let b = &input[j];
-                let distance = a.get_euclidian_distance(b);
-                distances.push((distance, i, j));
+                let sq_distance = input[i].calculate_distance(&input[j]);
+                distances.push((sq_distance, i, j));
             }
         }
 
-        distances.sort_by(|(a, _, _), (b, _, _)| a.cmp(b));
+        radix_sort_distances(&mut distances);
 
-        // let mut i = 0;
-        // let mut connections = 0;
-
-        let mut circuits = (0..input.len()).map(|i| Circuit::new_single(i)).collect::<Vec<_>>();
-        // let max_connections = distances.len();
+        // Union-Find
+        let mut uf = UnionFind::new(length);
+        let mut components = length;
 
         for (_, ai, bi) in distances {
-            // let (_, ai, bi) = distances[i];
-            // i += 1;
-
-
-
-            let ai_found_in_circuit_i = circuits.iter().position(|circuit: &Circuit| circuit.contains(&ai));
-            let bi_found_in_circuit_i = circuits.iter().position(|circuit: &Circuit| circuit.contains(&bi));
-
-            match (ai_found_in_circuit_i, bi_found_in_circuit_i) {
-                (Some(a_index), Some(b_index)) if a_index == b_index => {}
-                (Some(a_index), Some(b_index)) if a_index != b_index => {
-                    // two circuits can be joined
-                    let remove_index = a_index.max(b_index);
-                    let join_index = a_index.min(b_index);
-
-                    let values = circuits.remove(remove_index);
-                    circuits.get_mut(join_index).unwrap().merge(values);
-                    // connections += 1;
+            if uf.union(ai, bi) {
+                components -= 1;
+                if components == 1 {
+                    return input[ai].x * input[bi].x;
                 }
-                (Some(a_index), None) => {
-                    circuits.get_mut(a_index).unwrap().set(&bi);
-                    // connections += 1;
-                }
-                (None, Some(b_index)) => {
-                    circuits.get_mut(b_index).unwrap().set(&ai);
-                    // connections += 1;
-                }
-                (None, None) => {
-                    circuits.push(Circuit::new(ai, bi));
-                    // connections += 1;
-                    // panic!()
-                },
-                (Some(_), Some(_)) => panic!()
-            }
-            
-            if circuits.len() == 1 {
-                return (input[ai].x * input[bi].x) as i32;
             }
         }
+        0
+    }
+    
+    
+}
 
-        return -1;
+struct UnionFind {
+    parent: Vec<usize>,  // parent[i] = parent van node i
+    rank: Vec<usize>,    // rank[i] = diepte van tree onder i
+}
+
+impl UnionFind {
+    fn new(n: usize) -> Self {
+        UnionFind {
+            parent: (0..n).collect(),  // iedereen is eigen parent
+            rank: vec![0; n],
+        }
+    }
+
+    fn find(&mut self, x: usize) -> usize {
+        if self.parent[x] != x {
+            self.parent[x] = self.find(self.parent[x]); // Path compression
+        }
+        self.parent[x]
+    }
+
+    fn union(&mut self, x: usize, y: usize) -> bool {
+        let root_x = self.find(x);
+        let root_y = self.find(y);
+
+        if root_x == root_y {
+            return false; // Al in dezelfde set
+        }
+
+        // Union by rank
+        if self.rank[root_x] < self.rank[root_y] {
+            self.parent[root_x] = root_y;
+        } else if self.rank[root_x] > self.rank[root_y] {
+            self.parent[root_y] = root_x;
+        } else {
+            self.parent[root_y] = root_x;
+            self.rank[root_x] += 1;
+        }
+        true
+    }
+}
+
+fn radix_sort_distances(distances: &mut Vec<(usize, usize, usize)>) {
+    if distances.is_empty() { return; }
+
+    // Vind max voor aantal bits
+    let max_dist = distances.iter().map(|&(d, _, _)| d).max().unwrap();
+
+    // Aantal bits nodig
+    let max_bits = 64 - max_dist.leading_zeros();
+
+    // Sorteer per bit (of per 8 bits voor bytes)
+    let mut temp = vec![(0, 0, 0); distances.len()];
+
+    // Process per byte (8 bits tegelijk)
+    for byte_pos in 0..((max_bits + 7) / 8) {
+        let shift = byte_pos * 8;
+        let mut counts = [0usize; 256];
+
+        // Count occurrences
+        for &(dist, _, _) in distances.iter() {
+            let byte = ((dist >> shift) & 0xFF) as usize;
+            counts[byte] += 1;
+        }
+
+        // Prefix sum voor positions
+        let mut pos = 0;
+        for count in counts.iter_mut() {
+            let tmp = *count;
+            *count = pos;
+            pos += tmp;
+        }
+
+        // Place elements in sorted position
+        for &(dist, from, to) in distances.iter() {
+            let byte = ((dist >> shift) & 0xFF) as usize;
+            temp[counts[byte]] = (dist, from, to);
+            counts[byte] += 1;
+        }
+
+        distances.copy_from_slice(&temp);
     }
 }
