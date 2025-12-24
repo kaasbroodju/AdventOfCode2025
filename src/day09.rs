@@ -70,7 +70,7 @@ impl Day<Vec<(usize, usize)>, usize> for Day09 {
                 let area = (ax.abs_diff(bx) + 1) * (ay.abs_diff(by) + 1);
 
                 if area > max {
-                    if is_in_grid(&lines, (ax, ay), (bx, by)) {
+                    if !has_collision(&lines, (ax, ay), (bx, by)) {
                         println!("new MAX: {area}");
                         println!("idk: {:?}", ((ax, ay), (bx, by)));
                         maxes.push(area);
@@ -84,16 +84,11 @@ impl Day<Vec<(usize, usize)>, usize> for Day09 {
         }
 
         println!("{:?}", maxes);
-
-        // 4575309256 too high
-        // 2377856740 too high
-        // 458052838 too low
-        // 116002341 stuck
         max
     }
 }
 
-fn is_in_grid(
+fn has_collision(
     polygon: &Vec<((usize, usize), (usize, usize))>,
     a: (usize, usize),
     b: (usize, usize)
@@ -103,55 +98,75 @@ fn is_in_grid(
     let min_y = a.1.min(b.1);
     let max_y = a.1.max(b.1);
 
-    // Stap 1: Bereken het midden
-    let mid_x = (min_x + max_x) / 2;
-    let mid_y = (min_y + max_y) / 2;
-    let center = (mid_x, mid_y);
+    let (horizontal, vertical): (Vec<((usize, usize), (usize, usize))>, Vec<((usize, usize), (usize, usize))>) = polygon
+        .into_iter()
+        .partition(|((_, a), (_, b))| a == b);
 
-    // Stap 2 & 3: Trek lijnen van midden naar 4 hoeken en check kruisingen
-    let corners = [
-        (min_x, min_y),  // top-left
-        (max_x, min_y),  // top-right
-        (min_x, max_y),  // bottom-left
-        (max_x, max_y),  // bottom-right
-    ];
-
-    for &corner in &corners {
-        if line_crosses_polygon(&polygon, &center, &corner) {
-            return false;
+    for x in min_x..=max_x { // horizontal sweep, aka vertical lines
+        for (from, to) in &horizontal {
+            if crosses_horizontal((x, min_y), (x, max_y), *from, *to) {
+                return true;
+            }
         }
     }
 
-    // Stap 4: Ga de rand af en check lijnen naar midden
-    // Top rand
-    for x in min_x+1..max_x {
-        if line_crosses_polygon(polygon, &center, &(x, min_y)) {
-            return false;
+    for y in min_y..=max_y {
+        for (from, to) in &vertical {
+            if crosses_vertical((min_x, y), (max_x, y), *from, *to) {
+                return true;
+            }
         }
     }
 
-    // Bottom rand
-    for x in min_x+1..max_x {
-        if line_crosses_polygon(polygon, &center, &(x, max_y)) {
-            return false;
-        }
-    }
+    // // Stap 1: Bereken het midden
+    // let mid_x = (min_x + max_x) / 2;
+    // let mid_y = (min_y + max_y) / 2;
+    // let center = (mid_x, mid_y);
+    //
+    // // Stap 2 & 3: Trek lijnen van midden naar 4 hoeken en check kruisingen
+    // let corners = [
+    //     (min_x, min_y),  // top-left
+    //     (max_x, min_y),  // top-right
+    //     (min_x, max_y),  // bottom-left
+    //     (max_x, max_y),  // bottom-right
+    // ];
+    //
+    // for &corner in &corners {
+    //     if line_crosses_polygon(&polygon, &center, &corner) {
+    //         return false;
+    //     }
+    // }
+    //
+    // // Stap 4: Ga de rand af en check lijnen naar midden
+    // // Top rand
+    // for x in min_x+1..max_x {
+    //     if line_crosses_polygon(polygon, &center, &(x, min_y)) {
+    //         return false;
+    //     }
+    // }
+    //
+    // // Bottom rand
+    // for x in min_x+1..max_x {
+    //     if line_crosses_polygon(polygon, &center, &(x, max_y)) {
+    //         return false;
+    //     }
+    // }
+    //
+    // // Left rand
+    // for y in min_y+1..max_y {
+    //     if line_crosses_polygon(polygon, &center, &(min_x, y)) {
+    //         return false;
+    //     }
+    // }
+    //
+    // // Right rand
+    // for y in min_y+1..max_y {
+    //     if line_crosses_polygon(polygon, &center, &(max_x, y)) {
+    //         return false;
+    //     }
+    // }
 
-    // Left rand
-    for y in min_y+1..max_y {
-        if line_crosses_polygon(polygon, &center, &(min_x, y)) {
-            return false;
-        }
-    }
-
-    // Right rand
-    for y in min_y+1..max_y {
-        if line_crosses_polygon(polygon, &center, &(max_x, y)) {
-            return false;
-        }
-    }
-
-    true
+    false
 }
 
 // fn line_crosses_polygon(polygon: &Vec<((usize, usize), (usize, usize))>, center: &(usize, usize), coordinate: &(usize, usize)) -> bool {
@@ -267,13 +282,84 @@ fn segments_intersect_strict(
     false
 }
 
-fn on_segment_exclusive(x1: i64, y1: i64, x2: i64, y2: i64, x3: i64, y3: i64) -> bool {
-    // Check of punt (x3, y3) op segment (x1,y1)-(x2,y2) ligt, MAAR niet op eindpunten
-    if (x3 == x1 && y3 == y1) || (x3 == x2 && y3 == y2) {
-        return false;  // Op eindpunt = toegestaan
+fn crosses_horizontal(
+    from: (usize, usize),
+    to: (usize, usize),
+    from_polyglot: (usize, usize),
+    to_polyglot: (usize, usize)
+) -> bool {
+    // ployglot is horizontal
+    // from and to are vertical
+
+    let crossing_x = from.0;
+    let min_x = from_polyglot.0.min(to_polyglot.0);
+    let max_x = from_polyglot.0.max(to_polyglot.0);
+
+    let crossing_y = from_polyglot.1;
+    let min_y = from.1.min(to.1);
+    let max_y = from.1.max(to.1);
+
+    // crossing_x < min_x || crossing_x > max_x
+    return (crossing_x > min_x && crossing_x < max_x)
+        && (crossing_y > min_y && crossing_y < max_y)
+}
+
+fn crosses_vertical(
+    from: (usize, usize),
+    to: (usize, usize),
+    from_polyglot: (usize, usize),
+    to_polyglot: (usize, usize)
+) -> bool {
+    // ployglot is vertical
+    // from and to are horizontal
+    let crossing_x = from_polyglot.0;
+    let min_x = from.0.min(to.0);
+    let max_x = from.0.max(to.0);
+
+    let crossing_y = from.1;
+    let min_y = from_polyglot.1.min(to_polyglot.1);
+    let max_y = from_polyglot.1.max(to_polyglot.1);
+
+
+
+    // crossing_x < min_x || crossing_x > max_x
+    return (crossing_x > min_x && crossing_x < max_x)
+        && (crossing_y > min_y && crossing_y < max_y)
+}
+
+
+fn segments_intersect(
+    from: (usize, usize),
+    to: (usize, usize),
+    from_polyglot: (usize, usize),
+    to_polyglot: (usize, usize)
+) -> bool {
+    let (ax1, ay1) = (from.0 as i64, from.1 as i64);
+    let (ax2, ay2) = (to.0 as i64, to.1 as i64);
+    let (bx1, by1) = (from_polyglot.0 as i64, from_polyglot.1 as i64);
+    let (bx2, by2) = (to_polyglot.0 as i64, to_polyglot.1 as i64);
+
+    let d1 = direction(bx1, by1, bx2, by2, ax1, ay1);
+    let d2 = direction(bx1, by1, bx2, by2, ax2, ay2);
+    let d3 = direction(ax1, ay1, ax2, ay2, bx1, by1);
+    let d4 = direction(ax1, ay1, ax2, ay2, bx2, by2);
+
+    // Strikte kruising: beide segmenten moeten elkaar doorkruisen
+    if ((d1 > 0 && d2 < 0) || (d1 < 0 && d2 > 0)) &&
+        ((d3 > 0 && d4 < 0) || (d3 < 0 && d4 > 0)) {
+        return true;
     }
 
-    // Check of binnen segment
+    // Collinear cases: check of segmenten overlappen
+    if d1 == 0 && on_segment(bx1, by1, bx2, by2, ax1, ay1) { return true; }
+    if d2 == 0 && on_segment(bx1, by1, bx2, by2, ax2, ay2) { return true; }
+    if d3 == 0 && on_segment(ax1, ay1, ax2, ay2, bx1, by1) { return true; }
+    if d4 == 0 && on_segment(ax1, ay1, ax2, ay2, bx2, by2) { return true; }
+
+    false
+}
+
+fn on_segment(x1: i64, y1: i64, x2: i64, y2: i64, x3: i64, y3: i64) -> bool {
     x3 >= x1.min(x2) && x3 <= x1.max(x2) &&
         y3 >= y1.min(y2) && y3 <= y1.max(y2)
 }
