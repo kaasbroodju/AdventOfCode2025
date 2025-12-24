@@ -1,4 +1,4 @@
-﻿use std::collections::HashMap;
+﻿use std::collections::{HashMap, VecDeque};
 use std::fmt::{Debug, Display, Formatter};
 use rand::prelude::SliceRandom;
 use crate::Day;
@@ -61,7 +61,7 @@ impl Debug for Machine {
     }
 }
 
-impl Day<Vec<Machine>, i32> for Day10 {
+impl Day<Vec<Machine>, usize> for Day10 {
     fn parse_input(&self, input: &str) -> Vec<Machine> {
         input
             .lines()
@@ -69,86 +69,48 @@ impl Day<Vec<Machine>, i32> for Day10 {
             .collect::<Vec<Machine>>()
     }
     
-    fn part1(&self, input: &Vec<Machine>) -> i32 {
-        let length = input.len() as f64;
-        let results = input
+    fn part1(&self, input: &Vec<Machine>) -> usize {
+        input
             .iter()
-            .enumerate()
-            .map(|(i, m)| {
-                println!("{}", i as f64 / length * 100.0);
-                get_minimum(&mut HashMap::new(), m.target_lights, 0u16, &m.buttons, 0)
+            .map(|m| {
+                get_minimum_bfs(m.target_lights, m.buttons.as_slice())
             })
-            .collect::<Vec<usize>>();
-
-        println!("{:?}", results);
-
-        results
-            .iter()
-            .sum::<usize>() as i32
-        // println!("{:?}", input);
-        // // TODO: Implement part 1 solution
-        // 0
+            .sum::<usize>()
     }
     
-    fn part2(&self, _input: &Vec<Machine>) -> i32 {
+    fn part2(&self, _input: &Vec<Machine>) -> usize {
         // TODO: Implement part 2 solution
         0
     }
 }
 
-// fn get_minimum(cache: &mut HashMap<(u16, u16), usize>, current: u16, button_i_pressed: u16, buttons: &Vec<u16>, step: usize) -> usize {
-//     if current == 0 {
-//         cache.insert((current, button_i_pressed), step);
-//         step
-//     } else if step > 10 {
-//         step
-//     } else if let Some(&x) = cache.get(&(current, button_i_pressed)) {
-//         step + x
-//     } else {
-//         buttons
-//             .iter()
-//             .filter(|&&b| b != button_i_pressed)
-//             .map(|&b| get_minimum(cache, current ^ b, b, &buttons, step + 1))
-//             .min()
-//             .unwrap()
-//     }
-// }
+fn get_minimum_bfs(start: u16, buttons: &[u16]) -> usize {
+    let mut queue = VecDeque::new();
+    let mut visited = HashMap::new();
 
-fn get_minimum(
-    cache: &mut HashMap<(u16, u16), usize>,
-    current: u16,
-    button_i_pressed: u16,
-    buttons: &Vec<u16>,
-    step: usize
-) -> usize {
-    // Base case
-    if current == 0 {
-        return step;
+    queue.push_back((start, 0u16, 0usize)); // (state, last_button, steps)
+
+    while let Some((current, last_button, steps)) = queue.pop_front() {
+        if current == 0 {
+            return steps;
+        }
+
+        if steps > 10 {
+            continue;
+        }
+
+        let key = (current, last_button);
+        if visited.contains_key(&key) {
+            continue;
+        }
+        visited.insert(key, steps);
+
+        for &button in buttons {
+            if button != last_button {
+                queue.push_back((current ^ button, button, steps + 1));
+            }
+        }
     }
 
-    // Max depth pruning
-    if step > 10 {
-        return usize::MAX;
-    }
-
-    // Check cache BEFORE recursie
-    let cache_key = (current, button_i_pressed);
-    if let Some(&cached_steps) = cache.get(&cache_key) {
-        return step + cached_steps;
-    }
-
-    // Bereken minimum
-    let min_steps = buttons
-        .iter()
-        .filter(|&&b| b != button_i_pressed) // 2 keer xor resulteert in hetzelfde staat als voorheen, skip dus.
-        .map(|&b| get_minimum(cache, current ^ b, b, buttons, step + 1))
-        .min()
-        .unwrap_or(usize::MAX);
-
-    // Cache het resultaat (relatief tot huidige step)
-    if min_steps != usize::MAX {
-        cache.insert(cache_key, min_steps - step);
-    }
-
-    min_steps
+    usize::MAX
 }
